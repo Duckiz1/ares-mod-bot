@@ -23,10 +23,13 @@ export const config = {
   token: required('DISCORD_TOKEN'),
   clientId: required('DISCORD_CLIENT_ID'),
   guildId: required('DISCORD_GUILD_ID'),
+  // Where ticket channels live; defaults to the main server.
+  staffGuildId: optional('STAFF_GUILD_ID') ?? required('DISCORD_GUILD_ID'),
   staffRoleId: optional('STAFF_ROLE_ID'),
   logChannelId: optional('LOG_CHANNEL_ID'),
   reportsChannelId: optional('REPORTS_CHANNEL_ID'),
-  ticketCategoryId: optional('TICKET_CATEGORY_ID'),
+  // Ticket transcripts; defaults to the log channel.
+  ticketLogChannelId: optional('TICKET_LOG_CHANNEL_ID') ?? optional('LOG_CHANNEL_ID'),
   websiteUrl: (optional('WEBSITE_URL') ?? 'https://aresfleet.com').replace(/\/+$/, ''),
   modBotKey: optional('MOD_BOT_KEY'),
   automod: {

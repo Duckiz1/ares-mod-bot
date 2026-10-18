@@ -4,14 +4,26 @@ import { db } from './db.js';
 import { replyError } from './util.js';
 import { moderationCommand, syncCases } from './handlers/moderation.js';
 import { handleReportButton, syncReports } from './handlers/reports.js';
-import { closeTicketButton, createTicket, openTicketButton, ticketPanel } from './handlers/tickets.js';
+import {
+  closeTicketButton,
+  memberCloseButton,
+  onChannelDeleted,
+  onDirectMessage,
+  onTicketChannelMessage,
+  openTicketButton,
+  ticketCommand,
+  ticketModal,
+  ticketPanel,
+  ticketTypeSelected
+} from './handlers/tickets.js';
 import { onMemberJoin, onMemberLeave, onMessage, onMessageDelete, onMessageUpdate } from './handlers/events.js';
 import { websiteEnabled } from './services/website.js';
 
 // Members and Message Content are privileged intents: turn them on in the Developer Portal → Bot.
+// Direct Messages carry ticket conversations.
 const client = new Client({
   intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMembers, GatewayIntentBits.GuildMessages,
-    GatewayIntentBits.MessageContent, GatewayIntentBits.GuildModeration],
+    GatewayIntentBits.MessageContent, GatewayIntentBits.GuildModeration, GatewayIntentBits.DirectMessages],
   partials: [Partials.Message, Partials.Channel, Partials.GuildMember]
 });
 
@@ -19,6 +31,7 @@ async function onCommand(i: ChatInputCommandInteraction): Promise<void> {
   try {
     if (!i.inGuild()) return void (await i.reply('Use my commands inside the Ares server.'));
     if (i.commandName === 'ticket-panel') return await ticketPanel(i);
+    if (i.commandName === 'ticket') return await ticketCommand(i);
     await moderationCommand(i);
   } catch (error) {
     await replyError(i, error);
@@ -31,6 +44,7 @@ async function onButton(i: ButtonInteraction): Promise<void> {
     if (scope === 'report') return await handleReportButton(i, action, id);
     if (scope === 'ticket' && action === 'open') return await openTicketButton(i);
     if (scope === 'ticket' && action === 'close') return await closeTicketButton(i);
+    if (scope === 'ticket' && action === 'userclose') return await memberCloseButton(i, id);
   } catch (error) {
     await replyError(i, error);
   }
@@ -53,7 +67,8 @@ client.once(Events.ClientReady, (ready) => {
     ['LOG_CHANNEL_ID', config.logChannelId ? 'ok' : 'missing: logs and ticket transcripts are off'],
     ['REPORTS_CHANNEL_ID', config.reportsChannelId ? 'ok' : 'missing: website reports are not posted'],
     ['MOD_BOT_KEY', websiteEnabled() ? 'ok' : 'missing: website reports and cases are off'],
-    ['TICKET_CATEGORY_ID', config.ticketCategoryId ? 'ok' : 'missing: tickets are created without a category']
+    ['STAFF_GUILD_ID', ready.guilds.cache.has(config.staffGuildId) ? 'ok' : 'the bot is not in the staff server: tickets can’t be opened'],
+    ['TICKET_LOG_CHANNEL_ID', config.ticketLogChannelId ? 'ok' : 'missing: ticket transcripts are only DMed to the member']
   ];
   console.log('[setup]\n' + checks.map(([k, v]) => `  ${v === 'ok' ? '✓' : '!'} ${k}: ${v}`).join('\n'));
   const reports = guarded('website reports', () => syncReports(ready));
@@ -67,9 +82,17 @@ client.once(Events.ClientReady, (ready) => {
 client.on(Events.InteractionCreate, (i) => {
   if (i.isChatInputCommand()) void onCommand(i);
   else if (i.isButton()) void onButton(i);
-  else if (i.isModalSubmit() && i.customId === 'ticket:create') void createTicket(i).catch((e) => replyError(i, e));
+  else if (i.isStringSelectMenu() && i.customId === 'ticket:type') void ticketTypeSelected(i).catch((e) => replyError(i, e));
+  else if (i.isModalSubmit() && i.customId.startsWith('ticket:create:'))
+    void ticketModal(i, i.customId.split(':')[2]).catch((e) => replyError(i, e));
 });
-client.on(Events.MessageCreate, (m) => void onMessage(client, m).catch((e) => console.error('[automod]', e)));
+client.on(Events.MessageCreate, (m) => {
+  if (!m.inGuild()) return void onDirectMessage(client, m).catch((e) => console.error('[tickets]', e));
+  void onTicketChannelMessage(m)
+    .then((handled) => (handled ? undefined : onMessage(client, m)))
+    .catch((e) => console.error('[messages]', e));
+});
+client.on(Events.ChannelDelete, (c) => onChannelDeleted(c.id));
 client.on(Events.MessageDelete, (m) => void onMessageDelete(client, m).catch((e) => console.error('[log]', e)));
 client.on(Events.MessageUpdate, (a, b) => void onMessageUpdate(client, a, b).catch((e) => console.error('[log]', e)));
 client.on(Events.GuildMemberAdd, (m) => void onMemberJoin(client, m).catch((e) => console.error('[log]', e)));

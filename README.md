@@ -23,8 +23,13 @@ The Discord moderation bot for the Ares Orion Drift community. It works alongsid
 
 The bot refuses to act on staff, on itself, or on anyone whose highest role is as high as yours or above the bot's.
 
-**Tickets.** Members press **Open a ticket** and say what they need. The bot creates a private channel in `TICKET_CATEGORY_ID` that only they and staff can see. Either side presses **Close ticket**: the full transcript is saved to the log channel as a `.txt` file and DMed to the member, then the channel is deleted. One open ticket per member.
-
+**Tickets (DM-based).** Members talk to staff through DMs with the bot; staff answer from the staff server.
+- **Opening:** a member presses **Open a ticket** (posted with `/ticket-panel`) or just DMs the bot. They pick a type (**General, Report, Bug Report, Question, Staff Help**) and say what it's about.
+- **In the staff server** (`STAFF_GUILD_ID`), each ticket gets a channel such as `0042-report-hybrid` under the matching category (General Tickets, Report Tickets, Bug Report Tickets, Question Tickets, Staff Help Tickets). The bot creates the categories if they're missing. To limit who sees them, set permissions on the categories; new channels follow them.
+- **Talking:** everything the member DMs the bot (including screenshots and videos) appears in the ticket channel. Anything staff type there is DMed to the member. ✅ means delivered; ❌ means their DMs are closed. Start a message with `//` to keep it as a staff note that is never sent (marked 📝).
+- **Staff-opened tickets:** `/ticket open member type reason` (staff server). The member gets a DM and replies there.
+- **Closing:** the **Close ticket** button or `/ticket close [reason]` in the channel, or the **Close ticket** button in the member's DMs. The full transcript (with staff notes) goes to `TICKET_LOG_CHANNEL_ID` (or the log channel), and the member is DMed a copy without staff notes. Then the channel is deleted.
+- One open ticket per member. If their DMs are closed, no ticket is opened and they're told how to fix it.
 **Logs.** Deleted and edited messages, joins (new accounts are flagged), leaves, purges, tickets and every case go to the log channel. Nothing in logs pings anyone.
 
 **Automod** (staff are never affected):
@@ -37,18 +42,18 @@ The bot refuses to act on staff, on itself, or on anyone whose highest role is a
 
 1. **Create the application.** In the [Discord Developer Portal](https://discord.com/developers/applications), click New Application and name it e.g. "Ares Moderation".
    - On the **Bot** page, Reset Token and copy it into `DISCORD_TOKEN`.
-   - Turn on **Server Members Intent** and **Message Content Intent**.
+   - Turn on **Server Members Intent** and **Message Content Intent** (Message Content is also needed to read ticket DMs).
    - On **General Information**, copy the Application ID into `DISCORD_CLIENT_ID`.
 2. **Invite the bot.** Under OAuth2 → URL Generator, tick the scopes `bot` and `applications.commands`, and these permissions: View Channels, Send Messages, Embed Links, Attach Files, Read Message History, Manage Messages, Manage Channels, Moderate Members, Kick Members, Ban Members. Open the link and add it to the Ares server.
    - In Server Settings → Roles, drag the bot's role **above** the roles of members it should moderate.
-   - If the reports channel is in a separate staff server, invite the bot there too.
+   - Invite the bot to the **staff server** too, with Manage Channels, so it can create ticket categories and channels. Put that server's ID in `STAFF_GUILD_ID`. The reports channel can be there as well.
 3. **Configure.** Copy `.env.example` to `.env` (or `bot.env`) and fill it in. To get IDs, turn on Discord Settings → Advanced → Developer Mode, then right-click a server, role or channel → Copy ID. Ask the website owner for `MOD_BOT_KEY`.
 4. **Install and register commands:**
    ```
    npm ci
    npm run deploy:commands
    ```
-   Commands are hidden from members without the matching Discord permission (e.g. Moderate Members). To change who sees them, go to Server Settings → Integrations → Ares Moderation. The bot also requires `STAFF_ROLE_ID` or Administrator.
+   This registers the moderation commands and `/ticket-panel` in the Ares server, and `/ticket` in the staff server. Commands are hidden from members without the matching Discord permission (e.g. Moderate Members). To change who sees them, go to Server Settings → Integrations → Ares Moderation. The bot also requires `STAFF_ROLE_ID` or Administrator.
 5. **Run:**
    - Development: `npm run dev`
    - Production: `npm run build && npm start`
@@ -59,7 +64,7 @@ At startup the console lists any missing settings.
 
 ## Development
 
-- `npm test` runs the automod, case, report card, transcript and website tests (in-memory database).
+- `npm test` runs the automod, case, report card, ticket, transcript and website tests (in-memory database).
 - `npm run typecheck` checks the types.
 
 ```
@@ -68,6 +73,6 @@ src/
   commands.ts         slash command definitions (deploy with npm run deploy:commands)
   config.ts           settings from .env
   db.ts               SQLite schema (cases, tickets)
-  services/           cases, automod rules, transcripts, website API (no Discord code)
-  handlers/           moderation commands, report cards, tickets, logs + automod events
+  services/           cases, tickets, automod rules, transcripts, website API (no Discord code)
+  handlers/           moderation commands, report cards, DM tickets, logs + automod events
 ```

@@ -1,4 +1,5 @@
 import { PermissionFlagsBits, SlashCommandBuilder } from 'discord.js';
+import { TICKET_TYPES } from './services/tickets.js';
 
 const mod = PermissionFlagsBits.ModerateMembers;
 const reason = (required = true) => (o: import('discord.js').SlashCommandStringOption) =>
@@ -49,4 +50,17 @@ export const commands = [
     .addUserOption((o) => o.setName('from').setDescription('Only messages from this member')),
   new SlashCommandBuilder().setName('ticket-panel').setDescription('Post the "Open a ticket" button in this channel')
     .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
+];
+
+/** Staff-server commands: tickets live there. */
+export const staffCommands = [
+  new SlashCommandBuilder().setName('ticket').setDescription('Ticket tools for staff')
+    .setDefaultMemberPermissions(PermissionFlagsBits.ManageMessages)
+    .addSubcommand((s) => s.setName('open').setDescription('Open a ticket with a member (you talk through their DMs)')
+      .addUserOption((o) => o.setName('member').setDescription('Who to open a ticket with').setRequired(true))
+      .addStringOption((o) => o.setName('type').setDescription('Ticket type').setRequired(true)
+        .addChoices(...Object.entries(TICKET_TYPES).map(([value, t]) => ({ name: t.label, value }))))
+      .addStringOption((o) => o.setName('reason').setDescription('What it’s about (the member sees this)').setRequired(true).setMaxLength(1000)))
+    .addSubcommand((s) => s.setName('close').setDescription('Close this ticket (sends the member a transcript)')
+      .addStringOption((o) => o.setName('reason').setDescription('Why (the member sees this)').setMaxLength(500)))
 ];

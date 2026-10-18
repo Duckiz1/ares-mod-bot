@@ -1,6 +1,20 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { SpamTracker, blockedLinks, checkMessage, hasInvite } from './services/automod.js';
 import { buildTranscript } from './services/transcript.js';
+import {
+  TICKET_TYPES,
+  addTicketMessage,
+  categoryName,
+  channelName,
+  createTicket,
+  getTicket,
+  isTicketType,
+  markClosed,
+  nextTicketNumber,
+  openTicketOf,
+  ticketByChannel,
+  ticketMessages
+} from './services/tickets.js';
 import { addCase, caseCounts, casesFor, markSynced, unsyncedCases, updateReason } from './services/cases.js';
 import { minutesText, parseDuration } from './util.js';
 import { reportCard } from './handlers/reports.js';
@@ -95,19 +109,49 @@ describe('report cards', () => {
   });
 });
 
-describe('ticket transcripts', () => {
-  it('lists messages oldest first with attachments', () => {
-    const text = buildTranscript({ id: 3, userName: 'Member', topic: 'Help', createdAt: 0 }, [
-      { author: 'Staff#1', bot: false, createdAt: 2000, content: 'How can we help?', attachments: [] },
-      { author: 'Member#2', bot: false, createdAt: 1000, content: '', attachments: ['https://cdn/x.png'] }
-    ], 'Staff', 3000);
-    const lines = text.split('\n');
-    expect(lines[0]).toBe('Ares ticket #3');
-    expect(lines.findIndex((l) => l.includes('Member#2'))).toBeLessThan(lines.findIndex((l) => l.includes('Staff#1')));
-    expect(text).toContain('(no text)\n    [attachments] https://cdn/x.png');
+describe('tickets', () => {
+  it('keeps one open ticket per member, a full message log and a closed state', () => {
+    const t = createTicket({ channelId: 'chan-1', userId: 'member-1', userName: 'Member', type: 'bug', topic: 'Map is broken', openedBy: 'member' });
+    expect(openTicketOf('member-1')?.id).toBe(t.id);
+    expect(ticketByChannel('chan-1')?.type).toBe('bug');
+    addTicketMessage(t.id, { author: 'Member', fromStaff: false, internal: false, content: 'Map is broken', attachments: [], createdAt: 1000 });
+    addTicketMessage(t.id, { author: 'Mod A', fromStaff: true, internal: true, content: 'probably the new patch', attachments: [], createdAt: 2000 });
+    addTicketMessage(t.id, { author: 'Mod A', fromStaff: true, internal: false, content: 'Thanks, we’re on it', attachments: ['https://cdn/x.png'], createdAt: 3000 });
+    expect(ticketMessages(t.id).map((m) => [m.author, m.internal])).toEqual([['Member', false], ['Mod A', true], ['Mod A', false]]);
+    expect(markClosed(t.id, 'Mod A', 'Fixed')).toBe(true);
+    expect(markClosed(t.id, 'Mod B', null)).toBe(false); // already closed
+    expect(openTicketOf('member-1')).toBeUndefined();
+    expect(getTicket(t.id)).toMatchObject({ status: 'closed', closedBy: 'Mod A', closeReason: 'Fixed' });
+  });
+
+  it('names channels by number, type and member, and knows the next number', () => {
+    expect(channelName(42, 'report', 'Hybrid Dash!!')).toBe('0042-report-hybrid-dash');
+    expect(channelName(7, 'staff', '???')).toBe('0007-staff-member');
+    const next = nextTicketNumber();
+    expect(createTicket({ channelId: 'chan-2', userId: 'member-2', userName: 'M2', type: 'general', topic: 'Hi', openedBy: 'Mod A' }).id).toBe(next);
+    expect(categoryName('bug')).toBe('Bug Report Tickets');
+    expect(Object.values(TICKET_TYPES).map((t) => t.label)).toEqual(['General', 'Report', 'Bug Report', 'Question', 'Staff Help']);
+    expect(isTicketType('report')).toBe(true);
+    expect(isTicketType('spam')).toBe(false);
+  });
+
+  it('transcripts list messages in order, and the member’s copy leaves out staff notes', () => {
+    const t = createTicket({ channelId: 'chan-3', userId: 'member-3', userName: 'Member', type: 'question', topic: 'How do I join?', openedBy: 'member' });
+    addTicketMessage(t.id, { author: 'Mod A', fromStaff: true, internal: false, content: 'Use the Join button', attachments: [], createdAt: 2000 });
+    addTicketMessage(t.id, { author: 'Member', fromStaff: false, internal: false, content: '', attachments: ['https://cdn/x.png'], createdAt: 1000 });
+    addTicketMessage(t.id, { author: 'Mod B', fromStaff: true, internal: true, content: 'they asked last week too', attachments: [], createdAt: 3000 });
+    markClosed(t.id, 'Mod A', null);
+    const ticket = getTicket(t.id)!;
+    const staffCopy = buildTranscript(ticket, ticketMessages(t.id));
+    const memberCopy = buildTranscript(ticket, ticketMessages(t.id), true);
+    expect(staffCopy.split('\n')[0]).toBe(`Ares ticket #${t.id} · Question`);
+    expect(staffCopy.indexOf('Member: (no text)')).toBeLessThan(staffCopy.indexOf('Mod A (staff): Use the Join button'));
+    expect(staffCopy).toContain('[staff note] Mod B: they asked last week too');
+    expect(staffCopy).toContain('    [attachments] https://cdn/x.png');
+    expect(memberCopy).not.toContain('staff note');
+    expect(memberCopy).toContain('Use the Join button');
   });
 });
-
 describe('website calls', () => {
   afterEach(() => vi.unstubAllGlobals());
   it('sends the key and the right request bodies', async () => {

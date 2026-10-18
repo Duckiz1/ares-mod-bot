@@ -4,10 +4,10 @@ import { Colors, notice } from '../util.js';
 import type { Case } from '../services/cases.js';
 import { minutesText } from '../util.js';
 
-/** Posts to the log channel, never pinging anyone. Failures are only printed. */
-export async function log(client: Client, embed: EmbedBuilder, files: AttachmentBuilder[] = []): Promise<void> {
-  if (!config.logChannelId) return;
-  const channel = await client.channels.fetch(config.logChannelId).catch(() => null);
+/** Posts to the log channel (or another channel), never pinging anyone. Failures are only printed. */
+export async function log(client: Client, embed: EmbedBuilder, files: AttachmentBuilder[] = [], channelId = config.logChannelId): Promise<void> {
+  if (!channelId) return;
+  const channel = await client.channels.fetch(channelId).catch(() => null);
   if (!channel?.isSendable()) return;
   await channel.send({ embeds: [embed.setTimestamp()], files, allowedMentions: { parse: [] } }).catch((e) => console.error('[log]', e));
 }
