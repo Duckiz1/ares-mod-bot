@@ -19,7 +19,8 @@ The Discord moderation bot for the Ares Orion Drift community. It works alongsid
 | `/cases user` | A member's history |
 | `/case view number`, `/case reason number reason` | Look up or fix a case |
 | `/purge count [from]` | Delete up to 100 recent messages (Discord only allows the last 14 days) |
-| `/ticket-panel` | Post the "Open a ticket" button |
+| `/ticket-panel` | Post the "Open a ticket" button (Ares server) |
+| `/ticket open member type reason`, `/ticket close [reason]` | Open a ticket with a member, or close one (staff server) |
 
 The bot refuses to act on staff, on itself, or on anyone whose highest role is as high as yours or above the bot's.
 
